@@ -161,4 +161,3 @@ input, select, textarea {
 .card {
   @apply bg-white shadow-md hover:shadow-lg transition-shadow duration-200;
 }
-

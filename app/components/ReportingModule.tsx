@@ -263,4 +263,3 @@ export const ReportingModule: React.FC = () => {
     </div>
   )
 }
-

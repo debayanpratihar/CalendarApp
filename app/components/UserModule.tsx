@@ -437,4 +437,3 @@ export const UserModule: React.FC = () => {
     </div>
   )
 }
-

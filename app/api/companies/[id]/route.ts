@@ -29,4 +29,3 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   }
   return NextResponse.json({ message: 'Company deleted successfully' });
 }
-
