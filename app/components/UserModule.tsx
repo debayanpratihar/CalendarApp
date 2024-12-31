@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useAppContext } from '@/app/context/AppContext'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,16 +10,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react'
+import { CalendarIcon, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday, isPast, addMonths, startOfMonth, endOfMonth, isSameMonth } from 'date-fns'
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
 
 export const UserModule: React.FC = () => {
-  const { companies, communicationMethods, communications, addCommunication } = useAppContext()
+  const { companies, communicationMethods, communications, addCommunication, updateCompany } = useAppContext()
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [newCommunication, setNewCommunication] = useState({
     companyId: '',
@@ -102,8 +104,14 @@ export const UserModule: React.FC = () => {
     setIsDialogOpen(false)
   }
 
-  const toggleHighlight = (companyId: string) => {
-    setHighlightDisabled(prev => ({ ...prev, [companyId]: !prev[companyId] }))
+  const toggleHighlight = async (companyId: string) => {
+    const newHighlightDisabled = { ...highlightDisabled, [companyId]: !highlightDisabled[companyId] }
+    setHighlightDisabled(newHighlightDisabled)
+    
+    const company = companies.find(c => c._id === companyId)
+    if (company) {
+      await updateCompany(companyId, { ...company, highlightDisabled: newHighlightDisabled[companyId] })
+    }
   }
 
   const weekDays = eachDayOfInterval({
@@ -120,86 +128,145 @@ export const UserModule: React.FC = () => {
     return communications.filter(comm => isSameDay(new Date(comm.date), day))
   }
 
+  const exportToCSV = () => {
+    const csvContent = [
+      ['Company Name', 'Last Five Communications', 'Next Scheduled Communication'],
+      ...companies.map(company => [
+        company.name,
+        getLastFiveCommunications(company._id),
+        getNextScheduledCommunication(company._id)
+      ])
+    ].map(row => row.join(',')).join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', 'company_communications.csv')
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
+  }
+
+  const exportToPDF = () => {
+    const doc = new jsPDF()
+    doc.text('Company Communications', 14, 15)
+    doc.autoTable({
+      head: [['Company Name', 'Last Five Communications', 'Next Scheduled Communication']],
+      body: companies.map(company => [
+        company.name,
+        getLastFiveCommunications(company._id),
+        getNextScheduledCommunication(company._id)
+      ]),
+      startY: 20,
+    })
+    doc.save('company_communications.pdf')
+  }
+
+  useEffect(() => {
+    // Load highlight disabled state from companies
+    const newHighlightDisabled: { [key: string]: boolean } = {}
+    companies.forEach(company => {
+      newHighlightDisabled[company._id] = company.highlightDisabled || false
+    })
+    setHighlightDisabled(newHighlightDisabled)
+  }, [companies])
+
   return (
     <div className="space-y-8">
       <Tabs defaultValue="dashboard" className="w-full">
-        <TabsList>
+        <TabsList className="mb-4">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="calendar">Calendar</TabsTrigger>
         </TabsList>
         <TabsContent value="dashboard">
-          <Card>
-            <CardHeader>
+          <Card className="mb-4">
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Company Dashboard</CardTitle>
+              <div className="flex space-x-2">
+                <Button onClick={exportToCSV} className="bg-green-600 hover:bg-green-700">
+                  <Download className="mr-2 h-4 w-4" /> CSV
+                </Button>
+                <Button onClick={exportToPDF} className="bg-red-600 hover:bg-red-700">
+                  <Download className="mr-2 h-4 w-4" /> PDF
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Select</TableHead>
-                    <TableHead>Company Name</TableHead>
-                    <TableHead>Last Five Communications</TableHead>
-                    <TableHead>Next Scheduled Communication</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {companies.map((company) => (
-                    <TableRow key={company._id} className={getHighlightClass(company._id)}>
-                      <TableCell>
-                        <input
-                          type="checkbox"
-                          checked={selectedCompanies.includes(company._id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedCompanies([...selectedCompanies, company._id])
-                            } else {
-                              setSelectedCompanies(selectedCompanies.filter(id => id !== company._id))
-                            }
-                          }}
-                          className="form-checkbox h-5 w-5 text-primary"
-                        />
-                      </TableCell>
-                      <TableCell>{company.name}</TableCell>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <TableCell className="cursor-help">{getLastFiveCommunications(company._id)}</TableCell>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {sortedCommunications
-                              .filter(comm => comm.companyId === company._id)
-                              .slice(0, 5)
-                              .map(comm => (
-                                <div key={comm._id}>
-                                  {`${communicationMethods.find(m => m._id === comm.methodId)?.name} (${format(new Date(comm.date), 'dd MMM')}): ${comm.notes}`}
-                                </div>
-                              ))}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      <TableCell>{getNextScheduledCommunication(company._id)}</TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => toggleHighlight(company._id)}>
-                          {highlightDisabled[company._id] ? 'Enable Highlight' : 'Disable Highlight'}
-                        </Button>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]">Select</TableHead>
+                      <TableHead>Company Name</TableHead>
+                      <TableHead className="hidden md:table-cell">Last Five Communications</TableHead>
+                      <TableHead>Next Scheduled</TableHead>
+                      <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {companies.map((company) => (
+                      <TableRow key={company._id} className={getHighlightClass(company._id)}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={selectedCompanies.includes(company._id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedCompanies([...selectedCompanies, company._id])
+                              } else {
+                                setSelectedCompanies(selectedCompanies.filter(id => id !== company._id))
+                              }
+                            }}
+                            className="form-checkbox h-5 w-5 text-primary"
+                          />
+                        </TableCell>
+                        <TableCell>{company.name}</TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-help">{getLastFiveCommunications(company._id)}</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {sortedCommunications
+                                  .filter(comm => comm.companyId === company._id)
+                                  .slice(0, 5)
+                                  .map(comm => (
+                                    <div key={comm._id}>
+                                      {`${communicationMethods.find(m => m._id === comm.methodId)?.name} (${format(new Date(comm.date), 'dd MMM')}): ${comm.notes}`}
+                                    </div>
+                                  ))}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
+                        <TableCell>{getNextScheduledCommunication(company._id)}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" onClick={() => toggleHighlight(company._id)}>
+                            {highlightDisabled[company._id] ? 'Enable' : 'Disable'}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
 
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="mt-4" disabled={selectedCompanies.length === 0}>Communication Performed</Button>
+              <Button className="mb-4" disabled={selectedCompanies.length === 0}>Communication Performed</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>Log Communication</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
+              <div className="grid gap-4 py-4">
                 <Select
                   value={newCommunication.methodId}
                   onValueChange={(value) => setNewCommunication({ ...newCommunication, methodId: value })}
@@ -247,7 +314,7 @@ export const UserModule: React.FC = () => {
             </DialogContent>
           </Dialog>
 
-          <Card className="mt-8">
+          <Card>
             <CardHeader>
               <CardTitle>Notifications</CardTitle>
             </CardHeader>
@@ -370,3 +437,4 @@ export const UserModule: React.FC = () => {
     </div>
   )
 }
+

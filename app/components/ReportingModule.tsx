@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useAppContext } from '@/app/context/AppContext'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -9,33 +9,36 @@ import { Button } from "@/components/ui/button"
 import { DatePickerWithRange } from "@/components/ui/date-range-picker"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts'
 import { format, subDays, isWithinInterval } from 'date-fns'
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
+import { Download, RefreshCw } from 'lucide-react'
 
 export const ReportingModule: React.FC = () => {
-  const { companies, communicationMethods } = useAppContext()
-  const [communications, setCommunications] = useState([])
+  const { companies, communicationMethods, communications, fetchCommunications } = useAppContext()
   const [dateRange, setDateRange] = useState({ from: subDays(new Date(), 30), to: new Date() })
   const [selectedCompany, setSelectedCompany] = useState<string>('all')
   const [selectedMethod, setSelectedMethod] = useState<string>('all')
+  const [activityLog, setActivityLog] = useState<any[]>([])
 
   useEffect(() => {
-    const fetchCommunications = async () => {
-      try {
-        const response = await fetch('/api/communications');
-        if (!response.ok) {
-          throw new Error('Failed to fetch communications');
-        }
-        const data = await response.json();
-        setCommunications(data);
-      } catch (error) {
-        console.error('Error fetching communications:', error);
-      }
-    };
+    fetchCommunications()
+    const interval = setInterval(fetchCommunications, 60000) // Fetch every minute
+    return () => clearInterval(interval)
+  }, [fetchCommunications])
 
-    fetchCommunications();
-  }, []);
+  useEffect(() => {
+    setActivityLog(communications
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 10)
+      .map(comm => ({
+        date: format(new Date(comm.date), 'MMM dd, yyyy HH:mm'),
+        company: comm.companyId.name,
+        method: comm.methodId.name
+      })))
+  }, [communications])
 
   // Communication Frequency Report
-  const frequencyData = React.useMemo(() => {
+  const frequencyData = useMemo(() => {
     return communicationMethods.map(method => ({
       name: method.name,
       count: communications.filter(comm => 
@@ -47,7 +50,7 @@ export const ReportingModule: React.FC = () => {
   }, [communications, communicationMethods, selectedCompany, selectedMethod, dateRange])
 
   // Engagement Effectiveness Dashboard
-  const effectivenessData = React.useMemo(() => {
+  const effectivenessData = useMemo(() => {
     // This is a placeholder. In a real application, you'd need to track responses and success rates.
     return communicationMethods.map(method => ({
       name: method.name,
@@ -56,7 +59,7 @@ export const ReportingModule: React.FC = () => {
   }, [communicationMethods])
 
   // Overdue Communication Trends
-  const overdueData = React.useMemo(() => {
+  const overdueData = useMemo(() => {
     const days = 30
     return Array.from({ length: days }, (_, i) => {
       const date = subDays(new Date(), i)
@@ -75,21 +78,56 @@ export const ReportingModule: React.FC = () => {
     }).reverse()
   }, [companies, communications])
 
-  // Real-Time Activity Log
-  const activityLog = React.useMemo(() => {
-    return communications
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 10)
-      .map(comm => ({
-        date: format(new Date(comm.date), 'MMM dd, yyyy HH:mm'),
-        company: comm.companyId.name,
-        method: comm.methodId.name
-      }))
-  }, [communications])
+  const exportToCSV = () => {
+    const csvContent = [
+      ['Report Type', 'Data'],
+      ['Communication Frequency', ...frequencyData.map(d => `${d.name},${d.count}`)],
+      ['Engagement Effectiveness', ...effectivenessData.map(d => `${d.name},${d.successRate.toFixed(2)}`)],
+      ['Overdue Communication Trends', ...overdueData.map(d => `${d.date},${d.overdue}`)]
+    ].map(row => row.join(',')).join('\n')
 
-  const handleExport = (format: 'pdf' | 'csv') => {
-    // Placeholder for export functionality
-    console.log(`Exporting as ${format}`)
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', 'reports.csv')
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
+  }
+
+  const exportToPDF = () => {
+    const doc = new jsPDF()
+    doc.text('Reports', 14, 15)
+
+    // Communication Frequency
+    doc.text('Communication Frequency', 14, 25)
+    doc.autoTable({
+      head: [['Method', 'Count']],
+      body: frequencyData.map(d => [d.name, d.count]),
+      startY: 30,
+    })
+
+    // Engagement Effectiveness
+    doc.text('Engagement Effectiveness', 14, doc.lastAutoTable.finalY + 10)
+    doc.autoTable({
+      head: [['Method', 'Success Rate']],
+      body: effectivenessData.map(d => [d.name, `${d.successRate.toFixed(2)}%`]),
+      startY: doc.lastAutoTable.finalY + 15,
+    })
+
+    // Overdue Communication Trends
+    doc.text('Overdue Communication Trends', 14, doc.lastAutoTable.finalY + 10)
+    doc.autoTable({
+      head: [['Date', 'Overdue']],
+      body: overdueData.map(d => [d.date, d.overdue]),
+      startY: doc.lastAutoTable.finalY + 15,
+    })
+
+    doc.save('reports.pdf')
   }
 
   return (
@@ -130,8 +168,12 @@ export const ReportingModule: React.FC = () => {
         </div>
 
         <div className="flex gap-4 mb-8">
-          <Button onClick={() => handleExport('pdf')} className="bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200 shadow-lg hover:shadow-xl">Export as PDF</Button>
-          <Button onClick={() => handleExport('csv')} className="bg-green-600 hover:bg-green-700 text-white transition-colors duration-200 shadow-lg hover:shadow-xl">Export as CSV</Button>
+          <Button onClick={exportToPDF} className="bg-red-600 hover:bg-red-700 text-white transition-colors duration-200 shadow-lg hover:shadow-xl">
+            <Download className="mr-2 h-4 w-4" /> Export as PDF
+          </Button>
+          <Button onClick={exportToCSV} className="bg-green-600 hover:bg-green-700 text-white transition-colors duration-200 shadow-lg hover:shadow-xl">
+            <Download className="mr-2 h-4 w-4" /> Export as CSV
+          </Button>
         </div>
 
         <TabsContent value="frequency">
@@ -197,7 +239,12 @@ export const ReportingModule: React.FC = () => {
         <TabsContent value="activity">
           <Card>
             <CardHeader>
-              <CardTitle>Real-Time Activity Log</CardTitle>
+              <CardTitle className="flex justify-between items-center">
+                <span>Real-Time Activity Log</span>
+                <Button onClick={fetchCommunications} variant="outline" size="sm">
+                  <RefreshCw className="h-4 w-4 mr-2" /> Refresh
+                </Button>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <ul className="space-y-2">
@@ -216,3 +263,4 @@ export const ReportingModule: React.FC = () => {
     </div>
   )
 }
+
