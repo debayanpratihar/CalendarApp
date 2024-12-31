@@ -23,8 +23,8 @@ export interface CommunicationMethod {
 
 export interface Communication {
   _id: string
-  companyId: string
-  methodId: string
+  companyId: Company
+  methodId: CommunicationMethod
   date: Date
   notes: string
 }

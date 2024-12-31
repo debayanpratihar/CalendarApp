@@ -11,11 +11,12 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react'
-import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns'
+import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday, isPast, addMonths, startOfMonth, endOfMonth, isSameMonth } from 'date-fns'
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export const UserModule: React.FC = () => {
   const { companies, communicationMethods, communications, addCommunication } = useAppContext()
@@ -29,6 +30,7 @@ export const UserModule: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [view, setView] = useState<'week' | 'month'>('week')
+  const [highlightDisabled, setHighlightDisabled] = useState<{ [key: string]: boolean }>({})
 
   const sortedCommunications = useMemo(() => {
     return [...communications].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -61,18 +63,20 @@ export const UserModule: React.FC = () => {
   }
 
   const getHighlightClass = (companyId: string) => {
+    if (highlightDisabled[companyId]) return ''
+
     const company = companies.find(c => c._id === companyId)
     if (!company) return ''
 
     const lastCommunication = sortedCommunications.find(comm => comm.companyId === companyId)
-    if (!lastCommunication) return 'bg-red-100'
+    if (!lastCommunication) return 'bg-red-100 dark:bg-red-900'
 
     const nextDate = new Date(lastCommunication.date)
     nextDate.setDate(nextDate.getDate() + company.communicationPeriodicity)
 
     const today = new Date()
-    if (nextDate < today) return 'bg-red-100'
-    if (nextDate.toDateString() === today.toDateString()) return 'bg-yellow-100'
+    if (nextDate < today) return 'bg-red-100 dark:bg-red-900'
+    if (nextDate.toDateString() === today.toDateString()) return 'bg-yellow-100 dark:bg-yellow-900'
     return ''
   }
 
@@ -98,9 +102,18 @@ export const UserModule: React.FC = () => {
     setIsDialogOpen(false)
   }
 
+  const toggleHighlight = (companyId: string) => {
+    setHighlightDisabled(prev => ({ ...prev, [companyId]: !prev[companyId] }))
+  }
+
   const weekDays = eachDayOfInterval({
     start: startOfWeek(currentDate),
     end: endOfWeek(currentDate),
+  })
+
+  const monthDays = eachDayOfInterval({
+    start: startOfMonth(currentDate),
+    end: endOfMonth(currentDate),
   })
 
   const getDayEvents = (day: Date) => {
@@ -127,6 +140,7 @@ export const UserModule: React.FC = () => {
                     <TableHead>Company Name</TableHead>
                     <TableHead>Last Five Communications</TableHead>
                     <TableHead>Next Scheduled Communication</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -143,11 +157,33 @@ export const UserModule: React.FC = () => {
                               setSelectedCompanies(selectedCompanies.filter(id => id !== company._id))
                             }
                           }}
+                          className="form-checkbox h-5 w-5 text-primary"
                         />
                       </TableCell>
                       <TableCell>{company.name}</TableCell>
-                      <TableCell>{getLastFiveCommunications(company._id)}</TableCell>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <TableCell className="cursor-help">{getLastFiveCommunications(company._id)}</TableCell>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {sortedCommunications
+                              .filter(comm => comm.companyId === company._id)
+                              .slice(0, 5)
+                              .map(comm => (
+                                <div key={comm._id}>
+                                  {`${communicationMethods.find(m => m._id === comm.methodId)?.name} (${format(new Date(comm.date), 'dd MMM')}): ${comm.notes}`}
+                                </div>
+                              ))}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <TableCell>{getNextScheduledCommunication(company._id)}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" onClick={() => toggleHighlight(company._id)}>
+                          {highlightDisabled[company._id] ? 'Enable Highlight' : 'Disable Highlight'}
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -220,7 +256,7 @@ export const UserModule: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-semibold">Overdue Communications</h3>
                   <ul className="mt-2 space-y-2">
-                    {companies.filter(company => getHighlightClass(company._id) === 'bg-red-100').map(company => (
+                    {companies.filter(company => getHighlightClass(company._id) === 'bg-red-100 dark:bg-red-900').map(company => (
                       <li key={company._id} className="flex items-center">
                         <Badge variant="destructive" className="mr-2">Overdue</Badge>
                         {company.name}
@@ -231,7 +267,7 @@ export const UserModule: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-semibold">Today's Communications</h3>
                   <ul className="mt-2 space-y-2">
-                    {companies.filter(company => getHighlightClass(company._id) === 'bg-yellow-100').map(company => (
+                    {companies.filter(company => getHighlightClass(company._id) === 'bg-yellow-100 dark:bg-yellow-900').map(company => (
                       <li key={company._id} className="flex items-center">
                         <Badge variant="warning" className="mr-2">Today</Badge>
                         {company.name}
@@ -271,11 +307,21 @@ export const UserModule: React.FC = () => {
                   <div className="grid grid-cols-7 gap-2">
                     {weekDays.map((day) => (
                       <div key={day.toString()} className="border rounded p-2">
-                        <div className="font-semibold mb-2">{format(day, 'EEE d')}</div>
+                        <div className={cn("font-semibold mb-2", isToday(day) && "text-blue-600")}>{format(day, 'EEE d')}</div>
                         {getDayEvents(day).map((event) => (
-                          <div key={event._id} className="text-sm bg-blue-100 rounded p-1 mb-1">
-                            {companies.find(c => c._id === event.companyId)?.name}
-                          </div>
+                          <TooltipProvider key={event._id}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="text-sm bg-blue-100 dark:bg-blue-800 rounded p-1 mb-1 cursor-pointer">
+                                  {companies.find(c => c._id === event.companyId)?.name}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{communicationMethods.find(m => m._id === event.methodId)?.name}</p>
+                                <p>{event.notes}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         ))}
                       </div>
                     ))}
@@ -285,20 +331,36 @@ export const UserModule: React.FC = () => {
               {view === 'month' && (
                 <div>
                   <div className="flex justify-between items-center mb-4">
-                    <Button variant="outline" size="sm" onClick={() => setCurrentDate(addDays(currentDate, -30))}>
+                    <Button variant="outline" size="sm" onClick={() => setCurrentDate(addMonths(currentDate, -1))}>
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <span className="font-semibold">{format(currentDate, 'MMMM yyyy')}</span>
-                    <Button variant="outline" size="sm" onClick={() => setCurrentDate(addDays(currentDate, 30))}>
+                    <Button variant="outline" size="sm" onClick={() => setCurrentDate(addMonths(currentDate, 1))}>
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
-                  <Calendar
-                    mode="single"
-                    selected={currentDate}
-                    onSelect={(date) => date && setCurrentDate(date)}
-                    className="rounded-md border"
-                  />
+                  <div className="grid grid-cols-7 gap-2">
+                    {monthDays.map((day) => (
+                      <div key={day.toString()} className={cn("border rounded p-2", !isSameMonth(day, currentDate) && "opacity-50")}>
+                        <div className={cn("font-semibold mb-2", isToday(day) && "text-blue-600")}>{format(day, 'd')}</div>
+                        {getDayEvents(day).map((event) => (
+                          <TooltipProvider key={event._id}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="text-sm bg-blue-100 dark:bg-blue-800 rounded p-1 mb-1 cursor-pointer">
+                                  {companies.find(c => c._id === event.companyId)?.name}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{communicationMethods.find(m => m._id === event.methodId)?.name}</p>
+                                <p>{event.notes}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </CardContent>

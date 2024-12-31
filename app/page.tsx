@@ -1,35 +1,45 @@
 'use client'
 
 import { useState } from 'react'
+import { ThemeProvider } from 'next-themes'
 import { AdminModule } from '@/app/components/AdminModule'
 import { UserModule } from '@/app/components/UserModule'
 import { ReportingModule } from '@/app/components/ReportingModule'
 import { AppProvider } from '@/app/context/AppContext'
-import { Sidebar } from '@/app/components/Sidebar'
-import { Header } from '@/app/components/Header'
+import { Layout } from '@/app/components/Layout'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 function CalendarContent() {
   const [activeModule, setActiveModule] = useState('user')
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <Sidebar activeModule={activeModule} setActiveModule={setActiveModule} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-200 p-4">
-          {activeModule === 'user' && <UserModule />}
-          {activeModule === 'admin' && <AdminModule />}
-          {activeModule === 'reporting' && <ReportingModule />}
-        </main>
-      </div>
-    </div>
+    <Tabs value={activeModule} onValueChange={setActiveModule} className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="user">User Dashboard</TabsTrigger>
+        <TabsTrigger value="admin">Admin</TabsTrigger>
+        <TabsTrigger value="reporting">Reports</TabsTrigger>
+      </TabsList>
+      <TabsContent value="user">
+        <UserModule />
+      </TabsContent>
+      <TabsContent value="admin">
+        <AdminModule />
+      </TabsContent>
+      <TabsContent value="reporting">
+        <ReportingModule />
+      </TabsContent>
+    </Tabs>
   )
 }
 
 export default function Calendar() {
   return (
-    <AppProvider>
-      <CalendarContent />
-    </AppProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <AppProvider>
+        <Layout>
+          <CalendarContent />
+        </Layout>
+      </AppProvider>
+    </ThemeProvider>
   )
 }

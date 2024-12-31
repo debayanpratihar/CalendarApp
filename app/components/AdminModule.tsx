@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAppContext } from '@/app/context/AppContext'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Trash2, Edit } from 'lucide-react'
+import { Switch } from "@/components/ui/switch"
 
 export const AdminModule: React.FC = () => {
   const { 
@@ -33,14 +34,29 @@ export const AdminModule: React.FC = () => {
     comments: '',
     communicationPeriodicity: 14,
   })
+
   const [newMethod, setNewMethod] = useState({
     name: '',
     description: '',
     sequence: 0,
     mandatory: false,
   })
+
   const [editingCompany, setEditingCompany] = useState<string | null>(null)
   const [editingMethod, setEditingMethod] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (communicationMethods.length === 0) {
+      const defaultMethods = [
+        { name: 'LinkedIn Post', description: 'Post on LinkedIn', sequence: 1, mandatory: false },
+        { name: 'LinkedIn Message', description: 'Direct message on LinkedIn', sequence: 2, mandatory: false },
+        { name: 'Email', description: 'Send an email', sequence: 3, mandatory: false },
+        { name: 'Phone Call', description: 'Make a phone call', sequence: 4, mandatory: false },
+        { name: 'Other', description: 'Other communication method', sequence: 5, mandatory: false },
+      ]
+      defaultMethods.forEach(method => addCommunicationMethod(method))
+    }
+  }, [communicationMethods, addCommunicationMethod])
 
   const handleAddCompany = async () => {
     await addCompany({
@@ -64,7 +80,7 @@ export const AdminModule: React.FC = () => {
     setNewMethod({
       name: '',
       description: '',
-      sequence: 0,
+      sequence: communicationMethods.length + 1,
       mandatory: false,
     })
   }
@@ -120,7 +136,7 @@ export const AdminModule: React.FC = () => {
       setNewMethod({
         name: '',
         description: '',
-        sequence: 0,
+        sequence: communicationMethods.length + 1,
         mandatory: false,
       })
     }
@@ -281,11 +297,10 @@ export const AdminModule: React.FC = () => {
                 />
               </div>
               <div className="flex items-center space-x-2">
-                <input
+                <Switch
                   id="mandatory"
-                  type="checkbox"
                   checked={newMethod.mandatory}
-                  onChange={(e) => setNewMethod({ ...newMethod, mandatory: e.target.checked })}
+                  onCheckedChange={(checked) => setNewMethod({ ...newMethod, mandatory: checked })}
                 />
                 <Label htmlFor="mandatory">Mandatory</Label>
               </div>

@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Calendar App',
+  title: 'v0 App',
   description: 'Created with v0',
 }
 
