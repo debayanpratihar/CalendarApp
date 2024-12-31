@@ -161,3 +161,59 @@ input, select, textarea {
 .card {
   @apply bg-white shadow-md hover:shadow-lg transition-shadow duration-200;
 }
+
+/* Enhanced UI Colors and Opacities */
+:root {
+  --primary-color: 210 100% 50%;
+  --secondary-color: 200 100% 60%;
+  --accent-color: 280 100% 60%;
+  --background-color: 0 0% 100%;
+  --text-color: 222.2 84% 4.9%;
+  --card-background: 0 0% 100%;
+  --card-border: 214.3 31.8% 91.4%;
+}
+
+.dark {
+  --primary-color: 210 100% 40%;
+  --secondary-color: 200 100% 50%;
+  --accent-color: 280 100% 50%;
+  --background-color: 222.2 84% 4.9%;
+  --text-color: 210 40% 98%;
+  --card-background: 223 47% 11%;
+  --card-border: 217.2 32.6% 17.5%;
+}
+
+body {
+  background-color: hsl(var(--background-color));
+  color: hsl(var(--text-color));
+}
+
+.btn-default {
+  background-color: hsl(var(--primary-color));
+  color: white;
+}
+
+.btn-secondary {
+  background-color: hsl(var(--secondary-color));
+  color: white;
+}
+
+.btn-accent {
+  background-color: hsl(var(--accent-color));
+  color: white;
+}
+
+.card {
+  background-color: hsl(var(--card-background));
+  border-color: hsl(var(--card-border));
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn, .card {
+  transition: all 0.3s ease;
+}
+
+.btn:hover, .card:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}

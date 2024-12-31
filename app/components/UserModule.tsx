@@ -20,8 +20,15 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 
+interface Company {
+  _id: string;
+  name: string;
+  communicationPeriodicity: number;
+  highlightDisabled: boolean;
+}
+
 export const UserModule: React.FC = () => {
-  const { companies, communicationMethods, communications, addCommunication, updateCompany } = useAppContext()
+  const { companies, communicationMethods, communications, addCommunication, updateCompany, fetchCompanies } = useAppContext()
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [newCommunication, setNewCommunication] = useState({
     companyId: '',
@@ -108,9 +115,21 @@ export const UserModule: React.FC = () => {
     const newHighlightDisabled = { ...highlightDisabled, [companyId]: !highlightDisabled[companyId] }
     setHighlightDisabled(newHighlightDisabled)
     
-    const company = companies.find(c => c._id === companyId)
-    if (company) {
-      await updateCompany(companyId, { ...company, highlightDisabled: newHighlightDisabled[companyId] })
+    try {
+      const response = await fetch(`/api/companies/${companyId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ highlightDisabled: newHighlightDisabled[companyId] }),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to update company')
+      }
+      // Refresh companies data after successful update
+      fetchCompanies()
+    } catch (error) {
+      console.error('Error updating company:', error)
+      // Revert the local state if the API call fails
+      setHighlightDisabled({ ...highlightDisabled })
     }
   }
 
@@ -167,13 +186,25 @@ export const UserModule: React.FC = () => {
   }
 
   useEffect(() => {
-    // Load highlight disabled state from companies
-    const newHighlightDisabled: { [key: string]: boolean } = {}
-    companies.forEach(company => {
-      newHighlightDisabled[company._id] = company.highlightDisabled || false
-    })
-    setHighlightDisabled(newHighlightDisabled)
-  }, [companies])
+    const loadHighlightDisabledState = async () => {
+      try {
+        const response = await fetch('/api/companies')
+        if (!response.ok) {
+          throw new Error('Failed to fetch companies')
+        }
+        const companiesData = await response.json()
+        const newHighlightDisabled: { [key: string]: boolean } = {}
+        companiesData.forEach((company: Company) => {
+          newHighlightDisabled[company._id] = company.highlightDisabled || false
+        })
+        setHighlightDisabled(newHighlightDisabled)
+      } catch (error) {
+        console.error('Error loading highlight disabled state:', error)
+      }
+    }
+
+    loadHighlightDisabledState()
+  }, [])
 
   return (
     <div className="space-y-8">

@@ -28,6 +28,7 @@ export const ReportingModule: React.FC = () => {
 
   useEffect(() => {
     setActivityLog(communications
+      .filter(comm => comm.companyId && comm.methodId) // Add null checks
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 10)
       .map(comm => ({
@@ -42,6 +43,7 @@ export const ReportingModule: React.FC = () => {
     return communicationMethods.map(method => ({
       name: method.name,
       count: communications.filter(comm => 
+        comm.methodId && comm.companyId && // Add null checks
         (selectedMethod === 'all' || comm.methodId._id === selectedMethod) &&
         (selectedCompany === 'all' || comm.companyId._id === selectedCompany) &&
         isWithinInterval(new Date(comm.date), { start: dateRange.from, end: dateRange.to })
@@ -67,7 +69,7 @@ export const ReportingModule: React.FC = () => {
         date: format(date, 'MMM dd'),
         overdue: companies.filter(company => {
           const lastComm = communications
-            .filter(comm => comm.companyId._id === company._id)
+            .filter(comm => comm.companyId && comm.companyId._id === company._id) // Add null check
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
           if (!lastComm) return true
           const nextDue = new Date(lastComm.date)

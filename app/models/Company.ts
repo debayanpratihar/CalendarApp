@@ -8,6 +8,7 @@ const CompanySchema = new mongoose.Schema({
   phoneNumbers: [{ type: String }],
   comments: { type: String },
   communicationPeriodicity: { type: Number, default: 14 },
+  highlightDisabled: { type: Boolean, default: false },
 });
 
 export default mongoose.models.Company || mongoose.model('Company', CompanySchema);
