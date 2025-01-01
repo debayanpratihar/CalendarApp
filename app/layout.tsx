@@ -3,7 +3,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Calendar App',
-  description: 'Created with v0',
+  description: 'Created by Debayan Pratihar',
 }
 
 export default function RootLayout({
